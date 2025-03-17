@@ -1,5 +1,6 @@
 chapter_optimization/
 checkpoint/
+.DS_Store
 # Python
 __pycache__/
 *.py[cod]

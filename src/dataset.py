@@ -1,6 +1,8 @@
 # dataset.py
 import torch
 from torch.utils.data import Dataset
+from torch.utils.data import DataLoader
+
 
 class LinearRegressionDataset(Dataset):
     def __init__(self, num_samples=100):
@@ -58,3 +60,31 @@ class CarvanaDataset(Dataset):
         image = image.view(-1)
         
         return image, label
+
+def get_loaders(num_samples, batch_size):
+    """
+    Create data loaders for training and validation.
+    
+    Args:
+        num_samples (int): Number of samples for each dataset.
+        batch_size (int): Batch size.
+        
+    Returns:
+        tuple: (train_loader, val_loader) - Data loaders for training and validation.
+    """
+    train_dataset = LinearRegressionDataset(num_samples=num_samples)
+    val_dataset = LinearRegressionDataset(num_samples=num_samples // 4)  # Smaller validation set
+    
+    train_loader = DataLoader(
+        train_dataset, 
+        batch_size=batch_size, 
+        shuffle=True
+    )
+    
+    val_loader = DataLoader(
+        val_dataset, 
+        batch_size=batch_size, 
+        shuffle=False
+    )
+    
+    return train_loader, val_loader

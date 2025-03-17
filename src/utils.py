@@ -8,10 +8,12 @@ from dataset import LinearRegressionDataset
 import datetime
 import sys
 import io
+import subprocess
+from config import CHECKPOINTS_DIR, RESULTS_DIR, LOGS_DIR
 
-def save_checkpoint(state, filename="my_checkpoint.pth.tar", directory="checkpoints"):
+def save_checkpoint(state, filename="my_checkpoint.pth.tar", directory=CHECKPOINTS_DIR):
     """Save model checkpoint."""
-    print("=> Saving checkpoint")
+    print(f"=> Saving checkpoint to {directory}")
     if not os.path.exists(directory):
         os.makedirs(directory)
     torch.save(state, os.path.join(directory, filename))
@@ -22,34 +24,6 @@ def load_checkpoint(checkpoint, model, optimizer=None):
     model.load_state_dict(checkpoint["state_dict"])
     if optimizer:
         optimizer.load_state_dict(checkpoint["optimizer"])
-
-def get_loaders(num_samples, batch_size):
-    """
-    Create data loaders for training and validation.
-    
-    Args:
-        num_samples (int): Number of samples for each dataset.
-        batch_size (int): Batch size.
-        
-    Returns:
-        tuple: (train_loader, val_loader) - Data loaders for training and validation.
-    """
-    train_dataset = LinearRegressionDataset(num_samples=num_samples)
-    val_dataset = LinearRegressionDataset(num_samples=num_samples // 4)  # Smaller validation set
-    
-    train_loader = DataLoader(
-        train_dataset, 
-        batch_size=batch_size, 
-        shuffle=True
-    )
-    
-    val_loader = DataLoader(
-        val_dataset, 
-        batch_size=batch_size, 
-        shuffle=False
-    )
-    
-    return train_loader, val_loader
 
 def evaluate_model(loader, model, loss_fn, device="cuda"):
     """
@@ -83,7 +57,7 @@ def evaluate_model(loader, model, loss_fn, device="cuda"):
     print(f"Evaluation - Avg Loss: {avg_loss:.4f}")
     return avg_loss
 
-def visualize_predictions(model, device="cuda", num_points=100):
+def visualize_predictions(model, device="cuda", num_points=100, save_dir=RESULTS_DIR):
     """
     Visualize the model's predictions against the true relationship.
     
@@ -91,6 +65,7 @@ def visualize_predictions(model, device="cuda", num_points=100):
         model (nn.Module): Trained model.
         device (str): Device to use for computation.
         num_points (int): Number of points to plot.
+        save_dir (str): Directory to save the visualization.
     """
     model.eval()
     
@@ -119,18 +94,21 @@ def visualize_predictions(model, device="cuda", num_points=100):
     plt.grid(True)
     
     # Save the plot
-    if not os.path.exists('results'):
-        os.makedirs('results')
-    plt.savefig('results/linear_regression_plot.png')
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
+    plot_path = os.path.join(save_dir, 'linear_regression_plot.png')
+    plt.savefig(plot_path)
     plt.close()
+    print(f"Predictions visualization saved to '{plot_path}'")
 
-def plot_loss_curves(train_losses, val_losses):
+def plot_loss_curves(train_losses, val_losses, save_dir=RESULTS_DIR):
     """
     Plot the training and validation loss curves.
     
     Args:
         train_losses (list): Training losses per epoch.
         val_losses (list): Validation losses per epoch.
+        save_dir (str): Directory to save the loss curves plot.
     """
     epochs = range(1, len(train_losses) + 1)
     
@@ -152,18 +130,20 @@ def plot_loss_curves(train_losses, val_losses):
     plt.plot(marker_epochs, marker_val, 'ro')
     
     # Save the plot
-    if not os.path.exists('results'):
-        os.makedirs('results')
-    plt.savefig('results/loss_curves.png')
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
+    plot_path = os.path.join(save_dir, 'loss_curves.png')
+    plt.savefig(plot_path)
     plt.close()
     
-    print("Loss curves saved to 'results/loss_curves.png'")
+    print(f"Loss curves saved to '{plot_path}'")
 
 class Logger:
     """
     A simple logger class that can redirect stdout to both console and a log file.
+    Also logs git commit information for reproducibility.
     """
-    def __init__(self, log_dir='logs'):
+    def __init__(self, log_dir=LOGS_DIR):
         # Create logs directory if it doesn't exist
         if not os.path.exists(log_dir):
             os.makedirs(log_dir)
@@ -180,8 +160,11 @@ class Logger:
         self.captured_output = io.StringIO()
         
     def start_capture(self):
-        """Start capturing stdout."""
+        """Start capturing stdout and log git information."""
         sys.stdout = self
+        
+        # Log git information for reproducibility
+        self.log_git_info()
         
     def stop_capture(self):
         """Stop capturing and restore original stdout."""
@@ -199,6 +182,44 @@ class Logger:
         self.original_stdout.flush()
         self.log_file.flush()
         
+    def log_git_info(self):
+        """Log git repository information for reproducibility."""
+        self.write("\n" + "="*50 + "\n")
+        self.write("GIT INFORMATION\n")
+        self.write("="*50 + "\n")
+        
+        try:
+            # Get current commit hash
+            git_hash = subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], 
+                stderr=subprocess.DEVNULL
+            ).decode("utf-8").strip()
+            
+            # Get current branch
+            git_branch = subprocess.check_output(
+                ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+                stderr=subprocess.DEVNULL
+            ).decode("utf-8").strip()
+            
+            # Get commit message
+            git_message = subprocess.check_output(
+                ["git", "log", "-1", "--pretty=%B"],
+                stderr=subprocess.DEVNULL
+            ).decode("utf-8").strip()
+            
+            # Log git information
+            self.write(f"Git Branch: {git_branch}\n")
+            self.write(f"Git Commit: {git_hash}\n")
+            self.write(f"Commit Message: {git_message}\n")
+            
+            # Command to recover this exact version
+            self.write("\nTo recover this exact version, run:\n")
+            self.write(f"git checkout {git_hash}\n")
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            self.write("Git information not available. This might not be a git repository.\n")
+        
+        self.write("="*50 + "\n\n")
+    
     def log_hyperparameters(self, config_dict):
         """Log hyperparameters to the log file."""
         self.write("\n" + "="*50 + "\n")

@@ -27,6 +27,15 @@ class LinearRegressionModel(nn.Module):
         # Perform the linear transformation
         return x @ self.weight.T + self.bias
 
+# Model for Linear Logistic Regression
+class LinearLogisticRegressionModel(nn.Module):
+    def __init__(self, input_dim, output_dim):
+        super().__init__()
+        self.linear = nn.Linear(input_dim, output_dim)
+
+    def forward(self, x):
+        return torch.sigmoid(self.linear(x))
+
 
 
 # DataLoader
@@ -39,19 +48,19 @@ model = LinearRegressionModel(input_dim=1, output_dim=1)
 # Loss and Optimizer
 criterion = nn.MSELoss()
 # SGD
-optimizer = optim.SGD(model.parameters(), lr=0.01, momentum=0.9)
+optimizer = optim.SGD(model.parameters(), lr=0.01)
 # Adam
 # optimizer = optim.Adam(model.parameters(), lr=0.01, betas=(0.9, 0.999))
 
 # Training Loop
 num_epochs = 100
-for epoch in range(num_epochs):
-    for inputs, targets in dataloader:
-        outputs = model(inputs)
-        loss = criterion(outputs, targets)
+for epoch in range(num_epochs): 
+    for inputs, targets in dataloader: # every batch 10; go through all the data
+        outputs = model(inputs) # y = f(x) = wx + b
+        loss = criterion(outputs, targets) # loss = (y - y_true)^2
         optimizer.zero_grad()
         loss.backward()
-        optimizer.step() # Perform a single optimization step to update parameter.
+        optimizer.step() # x = x - lr * gt Perform a single optimization step to update parameter.
         # compute gradient norm
         grad_norm = sum(p.grad.norm() for p in model.parameters())
 

@@ -4,11 +4,12 @@ import numpy as np
 import pandas as pd
 
 #%% Creating a basic PyTorch tensor
-tensor = torch.tensor([1, 2, 3, 4, 5])
+tensor = torch.tensor([1.0, 2.0, 3.0, 4.0, 5.0])
 
 # Tensor Operations
 squared_tensor = tensor ** 2     # Element-wise squaring
 sum_value = tensor.sum()         # Calculate sum
+mean_value = tensor.mean()	   # Calculate mean
 
 #%% Creating tensors with specific properties
 zeros = torch.zeros(3, 4)                 # Tensor of zeros
