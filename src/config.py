@@ -8,7 +8,7 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 # Hyperparameters
 NUM_EPOCHS = 100
 BATCH_SIZE = 10
-LEARNING_RATE = 0.01
+LEARNING_RATE = 0.001
 
 # Linear Regression Dataset parameters
 NUM_SAMPLES = 100

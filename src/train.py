@@ -4,7 +4,9 @@ import torch.nn as nn
 import datetime
 import subprocess
 import os
+import sys
 from utils import *
+from tqdm import tqdm
 
 class Trainer:
     """
@@ -64,7 +66,7 @@ class Trainer:
             self.logger.start_capture()
             # Log timestamp at the beginning
             timestamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            print(f"Training started at: {timestamp}\n")
+            print(f"{'='*80}{timestamp}")
             # Log hyperparameters if provided
             if self.hyperparams:
                 self.logger.log_hyperparameters(self.hyperparams)
@@ -72,11 +74,12 @@ class Trainer:
         # Variables for tracking training progress
         self.train_losses = []
         self.val_losses = []
+        self.best_val_loss = float('inf')
         
         # Store start time for commit message
         self.start_time = datetime.datetime.now()
     
-    def _train_epoch(self):
+    def _train_epoch(self, epoch, pbar=None):
         """Train the model for one epoch."""
         self.model.train()  # Set the model to training mode
         running_loss = 0.0
@@ -95,11 +98,32 @@ class Trainer:
             self.optimizer.zero_grad()
             loss.backward()
             self.optimizer.step()
-
-            if batch_idx % 10 == 0:
-                print(f"Batch {batch_idx}/{len(self.train_loader)}: Loss = {loss.item():.4f}")
+            
+            # Update progress bar with current loss if provided
+            if pbar:
+                pbar.update(1)
+                pbar.set_postfix(train_loss=f"{loss.item():.3f}")
         
         avg_loss = running_loss / len(self.train_loader)
+        return avg_loss
+    
+    def _evaluate_model(self, pbar=None):
+        """Evaluate the model on validation data."""
+        self.model.eval()  # Set the model to evaluation mode
+        running_loss = 0.0
+        
+        with torch.no_grad():
+            for batch_idx, (data, targets) in enumerate(self.val_loader):
+                # Move data to the specified device
+                data = data.to(self.device)
+                targets = targets.to(self.device)
+                
+                # Forward pass
+                predictions = self.model(data)
+                loss = self.loss_fn(predictions, targets)
+                running_loss += loss.item()
+        
+        avg_loss = running_loss / len(self.val_loader)
         return avg_loss
     
     def _save_checkpoint(self, epoch):
@@ -154,15 +178,37 @@ class Trainer:
         
         # Training loop over epochs
         for epoch in range(self.num_epochs):
-            print(f"\nEpoch [{epoch+1}/{self.num_epochs}]")
+            # Print epoch header
+            print(f"\nEpoch {epoch+1} / {self.num_epochs}")
             
-            # Train for one epoch
-            train_loss = self._train_epoch()
-            self.train_losses.append(train_loss)
+            # Create a progress bar for the entire training process (all batches)
+            total_steps = len(self.train_loader)
+            with tqdm(total=total_steps, file=sys.stdout, 
+                     desc=f"Epoch {epoch+1}/{self.num_epochs}",
+                     bar_format='{l_bar}{bar:10}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}{postfix}]') as pbar:
+                
+                # Train for one epoch
+                train_loss = self._train_epoch(epoch, pbar)
+                self.train_losses.append(train_loss)
+                
+                # Evaluate on validation set
+                val_loss = self._evaluate_model()
+                self.val_losses.append(val_loss)
+                
+                # Update progress bar with both losses
+                pbar.set_postfix(train_loss=f"{train_loss:.3f}", val_loss=f"{val_loss:.3f}")
             
-            # Evaluate on validation set
-            val_loss = evaluate_model(self.val_loader, self.model, self.loss_fn, device=self.device)
-            self.val_losses.append(val_loss)
+            # Check if this is the best validation loss and print notification
+            if val_loss < self.best_val_loss:
+                self.best_val_loss = val_loss
+                print(f"<<<<<< reach best val loss : {val_loss} >>>>>>")
+                
+                # Save best model
+                checkpoint = {
+                    "state_dict": self.model.state_dict(),
+                    "optimizer": self.optimizer.state_dict()
+                }
+                save_checkpoint(checkpoint, filename="best_model.pth.tar", directory=self.checkpoints_dir)
             
             # Save model if needed
             if epoch % self.save_frequency == 0:

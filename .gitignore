@@ -1,5 +1,6 @@
 chapter_optimization/
 checkpoint/
+output/
 .DS_Store
 # Python
 __pycache__/
@@ -44,7 +45,6 @@ venv.bak/
 
 # Jupyter Notebook
 .ipynb_checkpoints
-*.ipynb
 
 # PyTorch
 *.pth
