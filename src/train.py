@@ -1,12 +1,112 @@
 # train.py
+import math
 import torch
 import torch.nn as nn
+from torch.optim.optimizer import Optimizer
 import datetime
 import subprocess
 import os
 import sys
 from utils import *
 from tqdm import tqdm
+
+
+import math
+import torch
+from torch.optim.optimizer import Optimizer
+
+class AGD(Optimizer):
+    def __init__(self, params, lr=0.01):
+        """
+        Implements Nesterov's Accelerated Gradient Descent (AGD).
+
+        Update formulas:
+            y_t = x_t + β_t * m_t,       where β_t = t / (t+3)
+            m_{t+1} = β_t * m_t + lr * ∇f(y_t)
+            x_{t+1} = x_t - m_{t+1}
+
+        This optimizer is designed to be used in the standard PyTorch style:
+            optimizer = AGD(model.parameters(), lr=0.01)
+            for data in loader:
+                optimizer.zero_grad()
+                loss = f(model(input))  # loss computed at the lookahead y_t
+                loss.backward()
+                optimizer.step()
+
+        Args:
+            params (iterable): Iterable of parameters to optimize.
+            lr (float): Learning rate.
+        """
+        defaults = dict(lr=lr)
+        super(AGD, self).__init__(params, defaults)
+
+    def zero_grad(self):
+        """
+        Overrides the default zero_grad.
+
+        For each parameter, updates the parameter to the lookahead iterate:
+            y_t = x_t + β_t * m_t,  with β_t = t / (t+3)
+        Then zeros out its gradient.
+
+        This ensures that the loss (and its gradient) are computed at y_t.
+        """
+        for group in self.param_groups:
+            for p in group['params']:
+                # Initialize per-parameter state if not present.
+                state = self.state.setdefault(p, {'x': p.data.clone(),          # true iterate x_t
+                                                    'm': torch.zeros_like(p.data), # momentum m_t
+                                                    'step': 0})                  # iteration counter t
+                # Compute β_t = t / (t+3); when t is zero, β_t = 0 so y_t = x_t.
+                t = state['step']
+                beta = t / (t + 3) if (t + 3) != 0 else 0.0
+                # Set parameter to the lookahead iterate: y_t = x_t + β_t * m_t.
+                p.data.copy_(state['x'] + beta * state['m'])
+                # Zero any existing gradient.
+                if p.grad is not None:
+                    p.grad.detach_()
+                    p.grad.zero_()
+
+    def step(self):
+        """
+        Performs one AGD update step.
+
+        Using the gradient computed at the lookahead iterate y_t (set in zero_grad()),
+        update the momentum and the true iterate as follows:
+
+            m_{t+1} = β_t * m_t + lr * ∇f(y_t)
+            x_{t+1} = x_t - m_{t+1}
+
+        Finally, update the parameter value to x_{t+1} and reset the gradient.
+        """
+        for group in self.param_groups:
+            lr = group['lr']
+            for p in group['params']:
+                # Skip if no gradient was computed.
+                if p.grad is None:
+                    continue
+                # Retrieve the per-parameter state.
+                state = self.state[p]
+                # Increment iteration counter (t).
+                state['step'] += 1
+                t = state['step']
+                # Compute β_t = t / (t+3)
+                beta = t / (t + 3)
+                # p.data currently holds y_t (the lookahead iterate).
+                grad = p.grad.data
+                # Update momentum: m_{t+1} = β_t * m_t + lr * ∇f(y_t)
+                m_new = beta * state['m'] + lr * grad
+                # Update the true iterate: x_{t+1} = x_t - m_{t+1}
+                x_new = state['x'] - m_new
+                # Save the new momentum and true iterate into the state.
+                state['m'].copy_(m_new)
+                state['x'].copy_(x_new)
+                # Update the parameter to the new iterate.
+                p.data.copy_(x_new)
+                # Reset the gradient.
+                p.grad.zero_()
+
+
+
 
 class Trainer:
     """

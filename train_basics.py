@@ -27,14 +27,21 @@ class LinearRegressionModel(nn.Module):
         # Perform the linear transformation
         return x @ self.weight.T + self.bias
 
-# Model for Linear Logistic Regression
-class LinearLogisticRegressionModel(nn.Module):
+# Model for logistic regression
+class LogisticRegressionModel(nn.Module):
     def __init__(self, input_dim, output_dim):
         super().__init__()
-        self.linear = nn.Linear(input_dim, output_dim)
+        # Initialize weight and bias as learnable parameters
+        self.weight = nn.Parameter(torch.randn(output_dim, input_dim))
+        self.bias = nn.Parameter(torch.randn(output_dim))
+        # Sigmoid activation for binary classification
+        self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
-        return torch.sigmoid(self.linear(x))
+        # Linear transformation followed by sigmoid activation
+        linear = x @ self.weight.T + self.bias
+        return self.sigmoid(linear)
+
 
 
 
@@ -47,6 +54,10 @@ model = LinearRegressionModel(input_dim=1, output_dim=1)
 
 # Loss and Optimizer
 criterion = nn.MSELoss()
+
+
+
+
 # SGD
 optimizer = optim.SGD(model.parameters(), lr=0.01)
 # Adam
